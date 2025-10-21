@@ -49,14 +49,13 @@ services:
       DB_PASSWORD: postgres
       DB_NAME: demo
       PORT: "8080"
-      # Optional: Uncomment to run in tsnet mode
+      TSNET: "true"
       TS_AUTHKEY: ${TS_AUTHKEY}
-      # TS_HOSTNAME: tailscale-demo-app
+      TS_HOSTNAME: tailscale-demo-app
     ports:
       - "8080:8080"
-    # Uncomment for tsnet mode to persist Tailscale state
-    # volumes:
-    #   - tsnet_state:/var/lib/tailscale
+    volumes:
+      - tsnet_state:/var/lib/tailscale
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,5 +70,4 @@ networks:
 
 volumes:
   postgres_data:
-  # Uncomment for tsnet mode
-  # tsnet_state:
+  tsnet_state:

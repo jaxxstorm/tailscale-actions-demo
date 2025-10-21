@@ -175,6 +175,22 @@ resource "aws_secretsmanager_secret_version" "tailscale_auth_key" {
   secret_string = var.tailscale_auth_key
 }
 
+# Store GitHub token in Secrets Manager for GHCR authentication
+resource "aws_secretsmanager_secret" "github_token" {
+  name_prefix             = "${var.name}-github-token-"
+  description             = "GitHub token for pulling images from GHCR"
+  recovery_window_in_days = 7
+
+  tags = merge(var.tags, {
+    Name = "${var.name}-github-token"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "github_token" {
+  secret_id     = aws_secretsmanager_secret.github_token.id
+  secret_string = var.github_token
+}
+
 # ECS Task Definition
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.name}-app"
@@ -191,6 +207,10 @@ resource "aws_ecs_task_definition" "app" {
       image = var.app_image
       essential = true
 
+      repositoryCredentials = {
+        credentialsParameter = aws_secretsmanager_secret.github_token.arn
+      }
+
       portMappings = [
         {
           containerPort = 8080
@@ -202,6 +222,10 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "PORT"
           value = "8080"
+        },
+        {
+          name  = "TSNET"
+          value = "false"
         },
         {
           name  = "DB_HOST"
@@ -239,14 +263,6 @@ resource "aws_ecs_task_definition" "app" {
           "awslogs-region"        = data.aws_region.current.name
           "awslogs-stream-prefix" = "ecs"
         }
-      }
-
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 60
       }
     }
   ])

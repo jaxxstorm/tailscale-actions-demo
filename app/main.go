@@ -50,6 +50,7 @@ type Config struct {
 	DBPassword        string `env:"DB_PASSWORD" default:"postgres" help:"Database password"`
 	DBName            string `env:"DB_NAME" default:"demo" help:"Database name"`
 	Port              string `env:"PORT" default:"8080" help:"HTTP server port"`
+	UseTsnet          bool   `env:"TSNET" default:"false" help:"Enable tsnet mode"`
 	TailscaleAuthKey  string `env:"TS_AUTHKEY" help:"Tailscale auth key for tsnet mode"`
 	TailscaleHostname string `env:"TS_HOSTNAME" default:"demo" help:"Hostname for tsnet registration"`
 }
@@ -84,7 +85,12 @@ func main() {
 	}
 
 	// Determine if we're running in tsnet mode
-	useTsnet := config.TailscaleAuthKey != ""
+	useTsnet := config.UseTsnet
+
+	// Validate tsnet configuration
+	if useTsnet && config.TailscaleAuthKey == "" {
+		log.Fatal("TSNET=true requires TS_AUTHKEY to be set")
+	}
 
 	// Create server instance (client will be set in tsnet mode)
 	server := &Server{

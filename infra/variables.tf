@@ -151,3 +151,9 @@ variable "alb_deletion_protection" {
   type        = bool
   default     = false
 }
+
+variable "github_token" {
+  description = "GitHub Personal Access Token for pulling from GHCR"
+  type        = string
+  sensitive   = true
+}
