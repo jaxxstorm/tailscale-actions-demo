@@ -18,7 +18,7 @@ jobs:
 
       - name: Configure Tailscale Credentials
         id: tailscale-auth
-        uses: jaxxstorm/configure-tailscale-credentials@main
+        uses: jaxxstorm/configure-tailscale-credentials@debug
         with:
           audience: ${{ secrets.TS_AUDIENCE }}
           client-id: ${{ secrets.TS_CLIENT_ID }}
@@ -26,7 +26,7 @@ jobs:
           tags: tag:ci
 
       - name: Connect to Tailscale
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@v4.0.2
         with:
           oauth-client-id: ${{ steps.tailscale-auth.outputs.ts-oauth-client-id }}
           oauth-secret: ${{ steps.tailscale-auth.outputs.ts-oauth-client-secret }}
