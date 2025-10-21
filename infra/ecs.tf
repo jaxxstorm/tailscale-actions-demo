@@ -207,7 +207,7 @@ resource "aws_ecs_task_definition" "app" {
         },
         {
           name  = "TSNET"
-          value = "false"
+          value = "true"
         },
         {
           name  = "DB_HOST"
