@@ -7,6 +7,9 @@ permissions:
 on:
   workflow_dispatch:
 
+env:
+    TS_ACTIONS_DEBUG: "true"
+
 jobs:
   add-product:
     name: Run New Product Migration
