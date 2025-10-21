@@ -42,7 +42,6 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
         Resource = [
           aws_secretsmanager_secret.db_password.arn,
           aws_secretsmanager_secret.tailscale_auth_key.arn,
-          aws_secretsmanager_secret.github_token.arn
         ]
       },
       {

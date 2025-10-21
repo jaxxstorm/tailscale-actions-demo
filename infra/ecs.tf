@@ -172,24 +172,10 @@ resource "aws_secretsmanager_secret" "tailscale_auth_key" {
 
 resource "aws_secretsmanager_secret_version" "tailscale_auth_key" {
   secret_id     = aws_secretsmanager_secret.tailscale_auth_key.id
-  secret_string = var.tailscale_auth_key
+  secret_string = var.app_auth_key
 }
 
-# Store GitHub token in Secrets Manager for GHCR authentication
-resource "aws_secretsmanager_secret" "github_token" {
-  name_prefix             = "${var.name}-github-token-"
-  description             = "GitHub token for pulling images from GHCR"
-  recovery_window_in_days = 7
 
-  tags = merge(var.tags, {
-    Name = "${var.name}-github-token"
-  })
-}
-
-resource "aws_secretsmanager_secret_version" "github_token" {
-  secret_id     = aws_secretsmanager_secret.github_token.id
-  secret_string = var.github_token
-}
 
 # ECS Task Definition
 resource "aws_ecs_task_definition" "app" {
@@ -206,10 +192,6 @@ resource "aws_ecs_task_definition" "app" {
       name  = "app"
       image = var.app_image
       essential = true
-
-      repositoryCredentials = {
-        credentialsParameter = aws_secretsmanager_secret.github_token.arn
-      }
 
       portMappings = [
         {
@@ -242,6 +224,10 @@ resource "aws_ecs_task_definition" "app" {
         {
           name  = "DB_USER"
           value = aws_db_instance.main.username
+        },
+        {
+          name  = "DB_SSLMODE"
+          value = "require"
         }
       ]
 

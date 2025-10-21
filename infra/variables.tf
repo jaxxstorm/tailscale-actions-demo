@@ -152,8 +152,9 @@ variable "alb_deletion_protection" {
   default     = false
 }
 
-variable "github_token" {
-  description = "GitHub Personal Access Token for pulling from GHCR"
+variable "app_auth_key" {
+  description = "Tailscale auth key for the application ECS tasks"
   type        = string
   sensitive   = true
 }
+

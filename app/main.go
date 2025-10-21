@@ -49,6 +49,7 @@ type Config struct {
 	DBUser            string `env:"DB_USER" default:"postgres" help:"Database user"`
 	DBPassword        string `env:"DB_PASSWORD" default:"postgres" help:"Database password"`
 	DBName            string `env:"DB_NAME" default:"demo" help:"Database name"`
+	DBSSLMode         string `env:"DB_SSLMODE" default:"disable" help:"Database SSL mode (disable, require, verify-ca, verify-full)"`
 	Port              string `env:"PORT" default:"8080" help:"HTTP server port"`
 	UseTsnet          bool   `env:"TSNET" default:"false" help:"Enable tsnet mode"`
 	TailscaleAuthKey  string `env:"TS_AUTHKEY" help:"Tailscale auth key for tsnet mode"`
@@ -65,8 +66,11 @@ func main() {
 	)
 
 	// Initialize database connection
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName, config.DBSSLMode)
+
+	log.Printf("Connecting to database: host=%s port=%s user=%s dbname=%s sslmode=%s",
+		config.DBHost, config.DBPort, config.DBUser, config.DBName, config.DBSSLMode)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -92,10 +96,10 @@ func main() {
 		log.Fatal("TSNET=true requires TS_AUTHKEY to be set")
 	}
 
-	// Create server instance (client will be set in tsnet mode)
+	// Create server instance
 	server := &Server{
 		db:        db,
-		client:    &tailscale.LocalClient{},
+		client:    nil, // Will be set in tsnet mode
 		tsnetMode: useTsnet,
 	}
 
@@ -236,14 +240,18 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 		health.Database = "connected"
 	}
 
-	// Check Tailscale status
-	status, err := s.client.Status(r.Context())
-	if err == nil && status != nil {
-		if status.BackendState == "Running" {
-			health.Tailscale = "connected"
-		} else {
-			health.Tailscale = string(status.BackendState)
+	// Check Tailscale status (only if client is available)
+	if s.client != nil {
+		status, err := s.client.Status(r.Context())
+		if err == nil && status != nil {
+			if status.BackendState == "Running" {
+				health.Tailscale = "connected"
+			} else {
+				health.Tailscale = string(status.BackendState)
+			}
 		}
+	} else {
+		health.Tailscale = "disabled"
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -364,7 +372,12 @@ func (s *Server) tailscaleWhois(ctx context.Context, r *http.Request) (*WhoIsDat
 		return u, nil
 	}
 
-	// Try to get WHOIS info from local Tailscale client (works in tsnet mode)
+	// If no client (TSNET=false), can't do local WhoIs lookup
+	if s.client == nil {
+		return nil, fmt.Errorf("not accessed via Tailscale - use 'tailscale serve' to add identity headers")
+	}
+
+	// Try to get WHOIS info from local Tailscale client (only works in tsnet mode)
 	whois, err := s.client.WhoIs(ctx, r.RemoteAddr)
 
 	if err != nil {
@@ -372,8 +385,8 @@ func (s *Server) tailscaleWhois(ctx context.Context, r *http.Request) (*WhoIsDat
 		if s.tsnetMode {
 			return nil, fmt.Errorf("failed to identify user via tsnet: %w", err)
 		}
-		// Not in tsnet mode and no headers - user needs to access via Tailscale
-		return nil, fmt.Errorf("not accessed via Tailscale - use 'tailscale serve' or set TS_AUTHKEY to run in tsnet mode")
+		// Should not reach here since client is nil when not in tsnet mode
+		return nil, fmt.Errorf("not accessed via Tailscale: %w", err)
 	}
 
 	// Extract user info from WhoIs response
