@@ -1,0 +1,51 @@
+name: Add New Product
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  workflow_dispatch:
+
+jobs:
+  add-product:
+    name: Run New Product Migration
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure Tailscale Credentials
+        id: tailscale-auth
+        uses: jaxxstorm/configure-tailscale-credentials@v1
+        with:
+          audience: ${{ secrets.TS_AUDIENCE }}
+          client-id: ${{ secrets.TS_CLIENT_ID }}
+          tailnet: ${{ secrets.TS_TAILNET }}
+          tags: tag:ci
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ steps.tailscale-auth.outputs.ts-oauth-client-id }}
+          oauth-secret: ${{ steps.tailscale-auth.outputs.ts-oauth-client-secret }}
+          tags: tag:ci
+
+      - name: Install golang-migrate
+        uses: jaxxstorm/action-install-gh-release@v2.1.0
+        with:
+          repo: golang-migrate/migrate
+          tag: v4.17.0
+          cache: enable
+
+      - name: Run new_product migration
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+        run: |
+          DB_URL="postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:5432/${DB_NAME}?sslmode=require"
+          migrate -path app/migrations/new_product -database "$DB_URL" up
+          echo "✅ New product (CI/CD) added successfully!"

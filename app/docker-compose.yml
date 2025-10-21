@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tailscale-demo-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: demo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tailscale-demo
+
+  migrate:
+    image: migrate/migrate:latest
+    container_name: tailscale-demo-migrate
+    volumes:
+      - ./migrations:/migrations
+    command: [
+      "-path=/migrations/initial",
+      "-database=postgres://postgres:postgres@postgres:5432/demo?sslmode=disable",
+      "up"
+    ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tailscale-demo
+    restart: on-failure
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tailscale-demo-app
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: demo
+      PORT: "8080"
+      # Optional: Uncomment to run in tsnet mode
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      # TS_HOSTNAME: tailscale-demo-app
+    ports:
+      - "8080:8080"
+    # Uncomment for tsnet mode to persist Tailscale state
+    # volumes:
+    #   - tsnet_state:/var/lib/tailscale
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - tailscale-demo
+
+networks:
+  tailscale-demo:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  # Uncomment for tsnet mode
+  # tsnet_state:

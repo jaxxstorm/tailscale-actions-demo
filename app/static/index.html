@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tailscale Demo Application</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Tailscale Demo Application</h1>
+            <p class="subtitle">Secure database access with Tailscale</p>
+        </header>
+
+        <div class="card user-card">
+            <h2>Connected User</h2>
+            <div id="user-info" class="loading">
+                <div class="spinner"></div>
+                <p>Loading user information...</p>
+            </div>
+        </div>
+
+        <div class="card products-card">
+            <h2>Products Database</h2>
+            <div id="products-info" class="loading">
+                <div class="spinner"></div>
+                <p>Loading products...</p>
+            </div>
+        </div>
+
+        <div class="card health-card">
+            <h2>System Health</h2>
+            <div id="health-info" class="loading">
+                <div class="spinner"></div>
+                <p>Checking system health...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
