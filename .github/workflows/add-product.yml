@@ -18,7 +18,7 @@ jobs:
 
       - name: Configure Tailscale Credentials
         id: tailscale-auth
-        uses: jaxxstorm/configure-tailscale-credentials@v1
+        uses: jaxxstorm/configure-tailscale-credentials@main
         with:
           audience: ${{ secrets.TS_AUDIENCE }}
           client-id: ${{ secrets.TS_CLIENT_ID }}
