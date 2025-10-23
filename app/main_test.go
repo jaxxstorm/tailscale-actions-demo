@@ -21,6 +21,7 @@ type TestConfig struct {
 	DBUser     string
 	DBPassword string
 	DBName     string
+	DBSSLMode  string
 }
 
 // getTestConfig reads test configuration from environment
@@ -32,6 +33,7 @@ func getTestConfig() TestConfig {
 		DBUser:     getEnvOrDefault("DB_USER", "postgres"),
 		DBPassword: getEnvOrDefault("DB_PASSWORD", "postgres"),
 		DBName:     getEnvOrDefault("DB_NAME", "demo"),
+		DBSSLMode:  getEnvOrDefault("DB_SSLMODE", "disable"),
 	}
 }
 
@@ -170,8 +172,8 @@ func TestProductsWithSeededData(t *testing.T) {
 	config := getTestConfig()
 
 	// First, verify we can connect to the database
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName, config.DBSSLMode)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -219,8 +221,8 @@ func TestProductsWithSeededData(t *testing.T) {
 func TestDatabaseConnection(t *testing.T) {
 	config := getTestConfig()
 
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName, config.DBSSLMode)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
