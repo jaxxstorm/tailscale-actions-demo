@@ -175,17 +175,33 @@ func main() {
 	mux.HandleFunc("/api/user", server.userHandler)
 	mux.HandleFunc("/api/products", server.productsHandler)
 
-	// Start server based on mode
+	// Start health check server (always runs for ALB/load balancer checks)
+	healthMux := http.NewServeMux()
+	healthMux.HandleFunc("/health", server.healthHandler)
+	
+	healthServer := &http.Server{
+		Addr:    ":" + config.Port,
+		Handler: healthMux,
+	}
+	
+	go func() {
+		log.Printf("Health check server listening on port %s", config.Port)
+		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Health check server error: %v", err)
+		}
+	}()
+
+	// Start main server based on mode
 	if useTsnet {
 		log.Printf("Starting in tsnet mode with hostname: %s", config.TailscaleHostname)
-		startTsnetServer(config, server, mux)
+		startTsnetServer(config, server, mux, healthServer)
 	} else {
 		log.Printf("Starting in regular HTTP mode on port %s", config.Port)
-		startRegularServer(config, mux)
+		startRegularServer(config, mux, healthServer)
 	}
 }
 
-func startTsnetServer(config Config, server *Server, handler http.Handler) {
+func startTsnetServer(config Config, server *Server, handler http.Handler, healthServer *http.Server) {
 	ts := &tsnet.Server{
 		Hostname: config.TailscaleHostname,
 		AuthKey:  config.TailscaleAuthKey,
@@ -240,11 +256,21 @@ func startTsnetServer(config Config, server *Server, handler http.Handler) {
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
 	}
+	
+	if err := healthServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Health server forced to shutdown: %v", err)
+	}
 
 	log.Println("Server exited")
 }
 
-func startRegularServer(config Config, handler http.Handler) {
+func startRegularServer(config Config, handler http.Handler, healthServer *http.Server) {
+	// In regular mode, we don't need a separate health server since the main handler has /health
+	// So just stop the health server and use the main handler
+	ctx, cancelHealth := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancelHealth()
+	healthServer.Shutdown(ctx)
+	
 	httpServer := &http.Server{
 		Addr:    ":" + config.Port,
 		Handler: handler,
