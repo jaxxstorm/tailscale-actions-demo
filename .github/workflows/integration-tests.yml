@@ -1,0 +1,170 @@
+name: Integration Tests
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: app/go.mod
+          cache-dependency-path: app/go.sum
+
+      - name: Install gotestfmt
+        run: go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+
+      - name: Configure Tailscale Credentials
+        id: tailscale-auth
+        uses: jaxxstorm/configure-tailscale-credentials@debug
+        with:
+          audience: ${{ secrets.TS_AUDIENCE }}
+          client-id: ${{ secrets.TS_CLIENT_ID }}
+          tailnet: ${{ secrets.TS_TAILNET }}
+          tags: tag:ci
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4.0.2
+        with:
+          oauth-client-id: ${{ steps.tailscale-auth.outputs.ts-oauth-client-id }}
+          oauth-secret: ${{ steps.tailscale-auth.outputs.ts-oauth-client-secret }}
+          tags: tag:ci
+
+      - name: Run integration tests
+        id: test
+        working-directory: app
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: "5432"
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_SSLMODE: "require"
+          PORT: "8080"
+          TSNET: "false"
+        run: |
+          set -euo pipefail
+          
+          echo "🧪 Running integration tests..."
+          go test -json -v ./... 2>&1 | tee /tmp/gotest.json | gotestfmt
+          
+          # Check if tests passed
+          TEST_EXIT_CODE=${PIPESTATUS[0]}
+          
+          if [ $TEST_EXIT_CODE -ne 0 ]; then
+            echo "test-result=failed" >> $GITHUB_OUTPUT
+            echo "❌ Tests failed"
+            exit 1
+          else
+            echo "test-result=passed" >> $GITHUB_OUTPUT
+            echo "✅ All tests passed!"
+          fi
+
+      - name: Parse test results and create annotations
+        if: always()
+        id: parse-tests
+        run: |
+          # Parse JSON test output to get summary and create annotations
+          if [ -f /tmp/gotest.json ]; then
+            TOTAL_TESTS=$(grep '"Action":"pass"\|"Action":"fail"' /tmp/gotest.json | grep '"Test":' | wc -l | tr -d ' ')
+            PASSED_TESTS=$(grep '"Action":"pass"' /tmp/gotest.json | grep '"Test":' | wc -l | tr -d ' ')
+            FAILED_TESTS=$(grep '"Action":"fail"' /tmp/gotest.json | grep '"Test":' | wc -l | tr -d ' ')
+            
+            echo "total=$TOTAL_TESTS" >> $GITHUB_OUTPUT
+            echo "passed=$PASSED_TESTS" >> $GITHUB_OUTPUT
+            echo "failed=$FAILED_TESTS" >> $GITHUB_OUTPUT
+            
+            # Create annotations for failed tests
+            if [ "$FAILED_TESTS" -gt 0 ]; then
+              echo "::error::Integration tests failed: $FAILED_TESTS out of $TOTAL_TESTS tests failed"
+              
+              # Extract failed test details and create individual annotations
+              grep '"Action":"fail"' /tmp/gotest.json | grep '"Test":' | while read -r line; do
+                TEST_NAME=$(echo "$line" | jq -r '.Test // "unknown"')
+                PACKAGE=$(echo "$line" | jq -r '.Package // "unknown"')
+                echo "::error file=app/main_test.go,title=Test Failed::Test '$TEST_NAME' in package $PACKAGE failed"
+              done
+            else
+              echo "::notice::All $TOTAL_TESTS integration tests passed successfully!"
+            fi
+          else
+            echo "total=0" >> $GITHUB_OUTPUT
+            echo "passed=0" >> $GITHUB_OUTPUT
+            echo "failed=0" >> $GITHUB_OUTPUT
+            echo "::warning::No test results found"
+          fi
+
+      - name: Comment test results on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const testResult = '${{ steps.test.outputs.test-result }}';
+            const totalTests = '${{ steps.parse-tests.outputs.total }}';
+            const passedTests = '${{ steps.parse-tests.outputs.passed }}';
+            const failedTests = '${{ steps.parse-tests.outputs.failed }}';
+            
+            const emoji = testResult === 'passed' ? '✅' : '❌';
+            const status = testResult === 'passed' ? 'PASSED' : 'FAILED';
+            
+            const comment = `## ${emoji} Integration Tests ${status}
+            
+            **Test Summary:**
+            - Total: ${totalTests}
+            - Passed: ${passedTests} ✅
+            - Failed: ${failedTests} ${failedTests > 0 ? '❌' : ''}
+            
+            ${testResult === 'failed' ? '**Please check the workflow logs for details.**' : '**All tests passed successfully!**'}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Output test summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const testResult = '${{ steps.test.outputs.test-result }}';
+            const totalTests = '${{ steps.parse-tests.outputs.total }}';
+            const passedTests = '${{ steps.parse-tests.outputs.passed }}';
+            const failedTests = '${{ steps.parse-tests.outputs.failed }}';
+            
+            const emoji = testResult === 'passed' ? '✅' : '❌';
+            
+            core.summary
+              .addHeading(`${emoji} Integration Test Results`)
+              .addTable([
+                [{data: 'Metric', header: true}, {data: 'Value', header: true}],
+                ['Status', testResult === 'passed' ? '✅ Passed' : '❌ Failed'],
+                ['Total Tests', totalTests],
+                ['Passed', `✅ ${passedTests}`],
+                ['Failed', failedTests > 0 ? `❌ ${failedTests}` : '0']
+              ])
+              .write();
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: /tmp/gotest.json
