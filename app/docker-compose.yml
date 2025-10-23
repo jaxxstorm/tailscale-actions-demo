@@ -20,23 +20,6 @@ services:
     networks:
       - tailscale-demo
 
-  migrate:
-    image: migrate/migrate:latest
-    container_name: tailscale-demo-migrate
-    volumes:
-      - ./migrations:/migrations
-    command: [
-      "-path=/migrations/initial",
-      "-database=postgres://postgres:postgres@postgres:5432/demo?sslmode=disable",
-      "up"
-    ]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - tailscale-demo
-    restart: on-failure
-
   app:
     build:
       context: .
@@ -59,8 +42,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     networks:
       - tailscale-demo
 

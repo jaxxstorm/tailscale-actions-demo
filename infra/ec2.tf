@@ -36,7 +36,7 @@ module "amz-tailscale-client" {
   source = "/Users/lbriggs/src/github/tailscale/terraform-cloudinit-tailscale"
   auth_key         = var.tailscale_auth_key
   enable_ssh       = true
-  hostname         = var.name
+  hostname         = "${var.name}-subnet-router"
   advertise_tags   = var.advertise_tags
   advertise_routes = [local.vpc_cidr]
   accept_routes    = false

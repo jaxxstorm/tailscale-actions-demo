@@ -42,7 +42,7 @@ jobs:
           tag: v4.17.0
           cache: enable
 
-      - name: Run new_product migration
+      - name: Run migration to add CI/CD product
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_USER: ${{ secrets.DB_USER }}
@@ -52,5 +52,6 @@ jobs:
           # URL encode the password to handle special characters
           ENCODED_PASSWORD=$(printf %s "$DB_PASSWORD" | jq -sRr @uri)
           DB_URL="postgres://${DB_USER}:${ENCODED_PASSWORD}@${DB_HOST}:5432/${DB_NAME}?sslmode=require"
-          migrate -path app/migrations/new_product -database "$DB_URL" up
-          echo "✅ New product (CI/CD) added successfully!"
+          # Migrate to version 2 (adds CI/CD product)
+          migrate -path app/migrations -database "$DB_URL" up
+          echo "✅ Migrated to version 2 - CI/CD product added!"

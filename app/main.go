@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,10 +14,16 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/lib/pq"
 	"tailscale.com/client/tailscale"
 	"tailscale.com/tsnet"
 )
+
+//go:embed migrations/*.sql
+var migrationFS embed.FS
 
 type Server struct {
 	db        *sql.DB
@@ -56,6 +63,45 @@ type Config struct {
 	TailscaleHostname string `env:"TS_HOSTNAME" default:"demo" help:"Hostname for tsnet registration"`
 }
 
+func runMigrations(db *sql.DB) error {
+	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	if err != nil {
+		return fmt.Errorf("could not create postgres driver: %w", err)
+	}
+
+	// Create source from embedded filesystem
+	d, err := iofs.New(migrationFS, "migrations")
+	if err != nil {
+		return fmt.Errorf("could not create migration source: %w", err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", d, "postgres", driver)
+	if err != nil {
+		return fmt.Errorf("could not create migrate instance: %w", err)
+	}
+
+	// Run initial migrations only (version 1 - base products without CI/CD)
+	log.Println("Running database migrations...")
+	if err := m.Migrate(1); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("migration failed: %w", err)
+	}
+
+	version, dirty, err := m.Version()
+	if err != nil && err != migrate.ErrNilVersion {
+		return fmt.Errorf("could not get migration version: %w", err)
+	}
+
+	if dirty {
+		log.Printf("⚠️  Warning: Migration is in dirty state at version %d", version)
+	} else if err == migrate.ErrNilVersion {
+		log.Println("No migrations applied yet")
+	} else {
+		log.Printf("✅ Database is at migration version %d", version)
+	}
+
+	return nil
+}
+
 func main() {
 	// Parse configuration using kong
 	var config Config
@@ -86,6 +132,11 @@ func main() {
 		log.Printf("Warning: Failed to ping database: %v", err)
 	} else {
 		log.Println("Successfully connected to database")
+	}
+
+	// Run database migrations
+	if err := runMigrations(db); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	// Determine if we're running in tsnet mode
@@ -354,6 +405,11 @@ func (s *Server) productsHandler(w http.ResponseWriter, r *http.Request) {
 	if err := rows.Err(); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error": "Error iterating rows: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
+	}
+
+	// If no products found, return empty array instead of null
+	if products == nil {
+		products = []map[string]interface{}{}
 	}
 
 	json.NewEncoder(w).Encode(products)

@@ -39,7 +39,7 @@ jobs:
           tag: v4.17.0
           cache: enable
 
-      - name: Run rollback migration
+      - name: Rollback to version 1
         env:
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_USER: ${{ secrets.DB_USER }}
@@ -49,5 +49,6 @@ jobs:
           # URL encode the password to handle special characters
           ENCODED_PASSWORD=$(printf %s "$DB_PASSWORD" | jq -sRr @uri)
           DB_URL="postgres://${DB_USER}:${ENCODED_PASSWORD}@${DB_HOST}:5432/${DB_NAME}?sslmode=require"
-          migrate -path app/migrations/rollback -database "$DB_URL" up
-          echo "✅ Product (CI/CD) removed successfully!"
+          # Rollback to version 1 (removes CI/CD product)
+          migrate -path app/migrations -database "$DB_URL" goto 1
+          echo "✅ Rolled back to version 1 - CI/CD product removed!"
