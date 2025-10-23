@@ -73,14 +73,26 @@ func waitForServer(baseURL string, timeout time.Duration) error {
 func TestHealth(t *testing.T) {
 	config := getTestConfig()
 
-	// Wait for server to be ready
-	if err := waitForServer(config.APIBaseURL, 30*time.Second); err != nil {
-		t.Fatalf("Server not ready: %v", err)
+	// Wait for server to be ready with a shorter timeout for demo purposes
+	t.Log("Waiting for API server to be ready...")
+	if err := waitForServer(config.APIBaseURL, 2*time.Second); err != nil {
+		t.Fatalf("❌ Cannot access API endpoint at %s after 2 seconds. Please verify:\n"+
+			"  1. The application is running\n"+
+			"  2. Network connectivity is working\n"+
+			"  3. Tailscale connection is established\n"+
+			"  Error: %v", config.APIBaseURL, err)
+	}
+	t.Logf("✅ API server is ready at %s", config.APIBaseURL)
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 2 * time.Second,
 	}
 
-	resp, err := http.Get(config.APIBaseURL + "/health")
+	resp, err := client.Get(config.APIBaseURL + "/health")
 	if err != nil {
-		t.Fatalf("Failed to call health endpoint: %v", err)
+		t.Fatalf("❌ Failed to call health endpoint after 2 seconds: %v\n"+
+			"Please verify network connectivity and that the server is responding.", err)
 	}
 	defer resp.Body.Close()
 
@@ -101,16 +113,23 @@ func TestHealth(t *testing.T) {
 		t.Errorf("Expected database 'connected', got '%s'", health.Database)
 	}
 
-	t.Logf("Health check passed: %+v", health)
+	t.Logf("✅ Health check passed: %+v", health)
 }
 
 // TestUserEndpoint tests the user API endpoint
 func TestUserEndpoint(t *testing.T) {
 	config := getTestConfig()
 
-	resp, err := http.Get(config.APIBaseURL + "/api/user")
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
+	t.Log("Calling /api/user endpoint...")
+	resp, err := client.Get(config.APIBaseURL + "/api/user")
 	if err != nil {
-		t.Fatalf("Failed to call user endpoint: %v", err)
+		t.Fatalf("❌ Failed to call user endpoint after 2 seconds: %v\n"+
+			"Please verify network connectivity to %s", err, config.APIBaseURL)
 	}
 	defer resp.Body.Close()
 
@@ -124,7 +143,7 @@ func TestUserEndpoint(t *testing.T) {
 	}
 
 	// User may or may not be connected via Tailscale
-	t.Logf("User info: connected=%v, login=%s, display=%s",
+	t.Logf("✅ User info: connected=%v, login=%s, display=%s",
 		userInfo.Connected, userInfo.LoginName, userInfo.DisplayName)
 }
 
@@ -132,9 +151,16 @@ func TestUserEndpoint(t *testing.T) {
 func TestProductsEndpoint(t *testing.T) {
 	config := getTestConfig()
 
-	resp, err := http.Get(config.APIBaseURL + "/api/products")
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
+	t.Log("Calling /api/products endpoint...")
+	resp, err := client.Get(config.APIBaseURL + "/api/products")
 	if err != nil {
-		t.Fatalf("Failed to call products endpoint: %v", err)
+		t.Fatalf("❌ Failed to call products endpoint after 2 seconds: %v\n"+
+			"Please verify network connectivity to %s", err, config.APIBaseURL)
 	}
 	defer resp.Body.Close()
 
@@ -147,7 +173,7 @@ func TestProductsEndpoint(t *testing.T) {
 		t.Fatalf("Failed to decode products response: %v", err)
 	}
 
-	t.Logf("Retrieved %d products", len(products))
+	t.Logf("✅ Retrieved %d products", len(products))
 
 	// Verify products have expected structure
 	for i, p := range products {
@@ -172,31 +198,37 @@ func TestProductsWithSeededData(t *testing.T) {
 	config := getTestConfig()
 
 	// First, verify we can connect to the database
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=2",
 		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName, config.DBSSLMode)
 
+	t.Log("Connecting to database to verify seeded data...")
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		t.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	// Count products in database
 	var count int
 	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM products").Scan(&count)
 	if err != nil {
-		t.Fatalf("Failed to count products: %v", err)
+		t.Fatalf("❌ Failed to count products in database after 2 seconds: %v\n"+
+			"Please verify database connectivity.", err)
 	}
 
-	t.Logf("Database has %d products", count)
+	t.Logf("✅ Database has %d products", count)
 
 	// Now test the API
-	resp, err := http.Get(config.APIBaseURL + "/api/products")
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
+	resp, err := client.Get(config.APIBaseURL + "/api/products")
 	if err != nil {
-		t.Fatalf("Failed to call products endpoint: %v", err)
+		t.Fatalf("❌ Failed to call products endpoint after 2 seconds: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -213,7 +245,7 @@ func TestProductsWithSeededData(t *testing.T) {
 	if len(products) > 0 {
 		name := products[0]["name"]
 		price := products[0]["price"]
-		t.Logf("First product: %v - $%v", name, price)
+		t.Logf("✅ First product: %v - $%v", name, price)
 	}
 }
 
@@ -221,29 +253,41 @@ func TestProductsWithSeededData(t *testing.T) {
 func TestDatabaseConnection(t *testing.T) {
 	config := getTestConfig()
 
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s connect_timeout=2",
 		config.DBHost, config.DBPort, config.DBUser, config.DBPassword, config.DBName, config.DBSSLMode)
 
+	t.Logf("Connecting to database at %s:%s...", config.DBHost, config.DBPort)
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
+		t.Fatalf("❌ Failed to open database connection: %v", err)
 	}
 	defer db.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Use 2 second timeout for demo purposes
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
+	t.Log("Pinging database...")
 	if err := db.PingContext(ctx); err != nil {
-		t.Fatalf("Failed to ping database: %v", err)
+		t.Fatalf("❌ Cannot reach database at %s:%s after 2 seconds. Please verify:\n"+
+			"  1. Database is running and accessible\n"+
+			"  2. Network connectivity (Tailscale connection if using private network)\n"+
+			"  3. Database credentials are correct\n"+
+			"  4. Security groups allow access\n"+
+			"  5. SSL/TLS settings (current: sslmode=%s)\n"+
+			"  Error: %v",
+			config.DBHost, config.DBPort, config.DBSSLMode, err)
 	}
+	t.Logf("✅ Successfully connected to database at %s:%s", config.DBHost, config.DBPort)
 
 	// Verify products table exists
+	t.Log("Verifying products table exists...")
 	var tableName string
 	err = db.QueryRowContext(ctx,
 		"SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='products'").Scan(&tableName)
 	if err != nil {
-		t.Fatalf("Products table does not exist: %v", err)
+		t.Fatalf("❌ Products table does not exist: %v", err)
 	}
 
-	t.Logf("Successfully verified database and products table")
+	t.Logf("✅ Successfully verified database and products table")
 }
