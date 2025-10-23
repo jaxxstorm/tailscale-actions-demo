@@ -51,8 +51,7 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_SSLMODE: "require"
-          PORT: "8080"
-          TSNET: "false"
+          TEST_API_URL: "http://demo:8080"
         run: |
           set -euo pipefail
           
