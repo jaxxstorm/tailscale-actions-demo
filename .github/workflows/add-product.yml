@@ -27,7 +27,7 @@ jobs:
           client-id: ${{ secrets.TS_CLIENT_ID }}
           tailnet: ${{ secrets.TS_TAILNET }}
           tags: tag:ci
-
+          
       - name: Connect to Tailscale
         uses: tailscale/github-action@v4.0.2
         with:

@@ -73,6 +73,7 @@ resource "aws_security_group" "ecs_tasks" {
     to_port         = 8080
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {

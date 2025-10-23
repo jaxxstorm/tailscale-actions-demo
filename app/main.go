@@ -178,12 +178,12 @@ func main() {
 	// Start health check server (always runs for ALB/load balancer checks)
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("/health", server.healthHandler)
-	
+
 	healthServer := &http.Server{
 		Addr:    ":" + config.Port,
 		Handler: healthMux,
 	}
-	
+
 	go func() {
 		log.Printf("Health check server listening on port %s", config.Port)
 		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -256,7 +256,7 @@ func startTsnetServer(config Config, server *Server, handler http.Handler, healt
 	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
 	}
-	
+
 	if err := healthServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Health server forced to shutdown: %v", err)
 	}
@@ -270,7 +270,7 @@ func startRegularServer(config Config, handler http.Handler, healthServer *http.
 	ctx, cancelHealth := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancelHealth()
 	healthServer.Shutdown(ctx)
-	
+
 	httpServer := &http.Server{
 		Addr:    ":" + config.Port,
 		Handler: handler,
