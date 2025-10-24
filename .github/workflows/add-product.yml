@@ -7,9 +7,6 @@ permissions:
 on:
   workflow_dispatch:
 
-env:
-    TS_ACTIONS_DEBUG: "true"
-
 jobs:
   add-product:
     name: Run New Product Migration
@@ -21,7 +18,7 @@ jobs:
 
       - name: Configure Tailscale Credentials
         id: tailscale-auth
-        uses: jaxxstorm/configure-tailscale-credentials@debug
+        uses: jaxxstorm/configure-tailscale-credentials@main
         with:
           audience: ${{ secrets.TS_AUDIENCE }}
           client-id: ${{ secrets.TS_CLIENT_ID }}
