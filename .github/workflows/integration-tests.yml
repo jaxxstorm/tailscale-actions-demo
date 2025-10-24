@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
           
           echo "🧪 Running integration tests..."
-          go test -json -v ./... 2>&1 | tee /tmp/gotest.json | gotestfmt
+          go test -json -count=1 -v ./... 2>&1 | tee /tmp/gotest.json | gotestfmt
           
           # Check if tests passed
           TEST_EXIT_CODE=${PIPESTATUS[0]}
